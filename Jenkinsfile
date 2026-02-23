@@ -12,9 +12,10 @@ pipeline {
     stage('Docker Build') {
       steps { sh "docker build -t ${IMAGE_NAME}:\${BUILD_NUMBER} . && docker tag ${IMAGE_NAME}:\${BUILD_NUMBER} ${IMAGE_NAME}:latest" }
     }
- stage('Trivy SCA') {
+stage('Trivy SCA') {
       steps {
         sh '''
+          mkdir -p /data/trivy-cache
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v /data/trivy-cache:/root/.cache/trivy \
@@ -25,12 +26,8 @@ pipeline {
           cat trivy-report.txt
         '''
       }
-      post { 
-        always { 
-          archiveArtifacts 'trivy-report.txt'
-          
-                      keepAll: true, reportDir: '.', reportFiles: 'trivy-report.txt'])
- }
+post { 
+        always { archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true }
       }
     }
     stage('DockerHub Push') {
@@ -43,5 +40,9 @@ pipeline {
       }
     }
   }
-  post { always { sh 'docker system prune -f; docker logout || true' } }
+  post { 
+    always { 
+      sh 'docker system prune -f; docker logout || true'
+    } 
+  }
 }
