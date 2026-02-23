@@ -1,4 +1,4 @@
-pipeline {
+	pipeline {
   agent any
   tools { nodejs 'Node18' }
   environment {
@@ -32,7 +32,6 @@ pipeline {
         """
       }
     }
-    stage('SonarQube SAST') { steps { echo 'Setup: docker run -p9000:9000 sonarsource/sonar-community' } }
     stage('Deploy') {
       steps {
 sh '''
@@ -48,14 +47,3 @@ sh '''
   post { always { sh 'docker system prune -f; docker logout || true' } }
 }
 
-    stage('SonarQube SAST') {
-      steps {
-        withSonarQubeEnv('Sonar') {
-          sh '''
-            wget -q -O - https://downloads.sonarsource.com/cli/sonar-scanner-cli-5.0.1.3006-linux.zip | sh -x
-            unzip sonar-scanner*.zip
-            ./sonar-scanner-*/bin/sonar-scanner -Dsonar.projectKey=swiggy-devsecops -Dsonar.sources=.
-          '''
-        }
-      }
-    }
