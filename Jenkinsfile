@@ -28,7 +28,7 @@ pipeline {
       post { 
         always { 
           archiveArtifacts 'trivy-report.txt'
-          publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, 
+          
                       keepAll: true, reportDir: '.', reportFiles: 'trivy-report.txt'])
  }
       }
