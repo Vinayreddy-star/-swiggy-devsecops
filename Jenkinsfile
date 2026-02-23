@@ -12,22 +12,30 @@ pipeline {
     stage('Docker Build') {
       steps { sh "docker build -t ${IMAGE_NAME}:\${BUILD_NUMBER} . && docker tag ${IMAGE_NAME}:\${BUILD_NUMBER} ${IMAGE_NAME}:latest" }
     }
-stage('Trivy SCA') {
+    stage('Trivy SCA') {
       steps {
         sh '''
-          mkdir -p /data/trivy-cache
+ mkdir -p /data/trivy-report
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v /data/trivy-cache:/root/.cache/trivy \
             aquasec/trivy:latest image \
-            --exit-code 0 --no-progress --format table \
+            --exit-code 0 --no-progress --format json \
             vinayreddy99/swiggy-devsecops:${BUILD_NUMBER} \
-            -o trivy-report.txt
-          cat trivy-report.txt
+            > /data/trivy-report/trivy-${BUILD_NUMBER}.json
+          docker run --rm \
+            -v /data/trivy-report:/data/trivy-report \
+            aquasec/trivy:latest image \
+            --format template --template "@/usr/share/trivy/templates/html.tpl" \
+            --input /data/trivy-report/trivy-${BUILD_NUMBER}.json \
+            -o /data/trivy-report/trivy-${BUILD_NUMBER}.html
+          ls -la /data/trivy-report/
         '''
       }
-post { 
-        always { archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true }
+      post { 
+        always { 
+ archiveArtifacts artifacts: '**/trivy-*.json trivy-*.html', allowEmptyArchive: true 
+        }
       }
     }
     stage('DockerHub Push') {
@@ -40,9 +48,5 @@ post {
       }
     }
   }
-  post { 
-    always { 
-      sh 'docker system prune -f; docker logout || true'
-    } 
-  }
+  post { always { sh 'docker system prune -f; docker logout || true' } }
 }
