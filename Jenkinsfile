@@ -1,38 +1,44 @@
 pipeline {
     agent any
+    environment {
+        DOCKER_IMAGE = "vinayreddy99/swiggy-devsecops:\${BUILD_NUMBER}"
+        DOCKER_REPO = "vinayreddy99/swiggy-devsecops"
+        DOCKER_CREDS = credentials('dockerhub')
+    }
     stages {
         stage('Checkout') {
             steps {
-                echo 'Cloning repo...'
                 checkout scm
             }
         }
-        stage('NPM Install & Test') {
+        stage('NPM Install') {
             steps {
-                sh 'npm install'
+                sh 'npm ci'
+            }
+        }
+        stage('Test') {
+            steps {
                 sh 'npm test || true'
             }
         }
         stage('Docker Build') {
             steps {
-                sh 'docker build -t vinayreddy99/swiggy-devsecops:${BUILD_NUMBER} .'
+                sh "docker build -t \${DOCKER_IMAGE} ."
+                sh "docker tag \${DOCKER_IMAGE} \${DOCKER_REPO}:latest"
             }
         }
-        stage('Docker Push') {
+        stage('Docker Login & Push') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub') {
-                        sh "docker tag vinayreddy99/swiggy-devsecops:${BUILD_NUMBER} vinayreddy99/swiggy-devsecops:latest"
-                        sh "docker push vinayreddy99/swiggy-devsecops:${BUILD_NUMBER}"
-                        sh 'docker push vinayreddy99/swiggy-devsecops:latest'
-                    }
-                }
+                sh 'echo \$DOCKER_CREDS_PSW | docker login -u \$DOCKER_CREDS_USR --password-stdin'
+                sh "docker push \${DOCKER_IMAGE}"
+                sh "docker push \${DOCKER_REPO}:latest"
             }
         }
     }
     post {
-        success {
-            echo 'Pipeline SUCCESS! Check DockerHub.'
+        always {
+            sh 'docker system prune -f || true'
+            sh 'docker logout || true'
         }
     }
 }
