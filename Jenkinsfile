@@ -37,7 +37,7 @@
 sh '''
   docker stop $(docker ps -q --filter ancestor=vinayreddy99/swiggy-devsecops:latest) || true
   docker rm $(docker ps -aq --filter ancestor=vinayreddy99/swiggy-devsecops:latest) || true
-  docker run -d --name swiggy-app --restart unless-stopped --memory=512m -p 3000:3000 \\
+  docker run -d --name swiggy-app-${BUILD_NUMBER} --restart unless-stopped --memory=512m -p 3000:3000 \\
     -e PORT=3000 -e BUILD_NUMBER=${BUILD_NUMBER} vinayreddy99/swiggy-devsecops:${BUILD_NUMBER}
   sleep 10 && curl -f http://localhost:3000/health || echo "Startup ongoing"
 '''
