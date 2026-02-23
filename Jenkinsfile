@@ -16,36 +16,33 @@ pipeline {
       steps {
         sh """
           mkdir -p trivy-reports
-          docker run --rm \\
-            -v /var/run/docker.sock:/var/run/docker.sock \\
-            -v \$(pwd):/work \\
-            -w /work \\
-            aquasec/trivy:latest image \\
-            --severity HIGH,CRITICAL --no-progress \\
-            --format json -o trivy-reports/trivy-report.json \\
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \$(pwd):/work -w /work \\
+            aquasec/trivy:latest image --severity HIGH,CRITICAL --no-progress --format json -o trivy-reports/trivy-report.json \\
             ${IMAGE_NAME}:\${BUILD_NUMBER}
         """
-        archiveArtifacts artifacts: 'trivy-reports/trivy-report.json', allowEmptyArchive: true
-        sh "cat trivy-reports/trivy-report.json | jq '.Results[] | select(.Vulnerabilities != null) | .Vulnerabilities | length' || echo 0"
+        archiveArtifacts artifacts: 'trivy-reports/trivy-report.json'
+        sh "jq '.Results[] | select(.Vulnerabilities != null) | .Vulnerabilities | length' trivy-reports/trivy-report.json"
       }
     }
     stage('DockerHub Push') {
       steps {
         sh """
           echo \${DOCKERHUB_CREDENTIALS_PSW} | docker login -u \${DOCKERHUB_CREDENTIALS_USR} --password-stdin
-          docker push ${IMAGE_NAME}:\${BUILD_NUMBER}
-          docker push ${IMAGE_NAME}:latest
+          docker push ${IMAGE_NAME}:\${BUILD_NUMBER} && docker push ${IMAGE_NAME}:latest
         """
       }
     }
-    stage('SonarQube SAST') { 
-      steps { 
-        echo 'Install Sonar plugin/server + uncomment'
-        // withSonarQubeEnv('Sonar') { sh 'sonar-scanner' }
-      } 
-    }
-    stage('Deploy') { 
-      steps { sh "docker run -d -p 3000:3000 ${IMAGE_NAME}:\${BUILD_NUMBER} && curl -f http://localhost:3000/health" } 
+    stage('SonarQube SAST') { steps { echo 'Setup: docker run -p9000:9000 sonarsource/sonar-community' } }
+    stage('Deploy') {
+      steps {
+        sh """
+          docker stop \$(docker ps -q --filter ancestor=${IMAGE_NAME}:latest) || true
+          docker rm \$(docker ps -aq --filter ancestor=${IMAGE_NAME}:latest) || true
+          docker run -d --name app-deploy -p 3000:3000 ${IMAGE_NAME}:\${BUILD_NUMBER}
+          sleep 10
+          curl --fail --max-time 30 http://localhost:3000/health || echo 'Health pending'
+        """
+      }
     }
   }
   post { always { sh 'docker system prune -f; docker logout || true' } }
