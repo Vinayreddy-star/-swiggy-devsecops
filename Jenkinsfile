@@ -10,9 +10,14 @@ pipeline {
                 sh 'docker tag vinayreddy99/swiggy-devsecops:$BUILD_NUMBER vinayreddy99/swiggy-devsecops:latest'
             }
         }
-        stage('Trivy Security Scan') {
+stage('Trivy Security Scan') {
             steps {
- withCredentials([usernamePassword(credentialsId: 'dockerhub', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                sh 'docker run --rm aquasec/trivy:latest image --exit-code 0 --no-progress vinayreddy99/swiggy-devsecops:$BUILD_NUMBER'
+            }
+        }
+        stage('Docker Login & Push') {
+            steps {
+withCredentials([usernamePassword(credentialsId: 'dockerhub', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
                     sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                     sh 'docker push vinayreddy99/swiggy-devsecops:$BUILD_NUMBER'
                     sh 'docker push vinayreddy99/swiggy-devsecops:latest'
@@ -20,5 +25,10 @@ pipeline {
             }
         }
     }
-    post { always { sh 'docker system prune -f || true'; sh 'docker logout || true' } }
+    post { 
+        always { 
+            sh 'docker system prune -f || true' 
+            sh 'docker logout || true' 
+        } 
+    }
 }
