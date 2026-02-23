@@ -35,13 +35,13 @@ pipeline {
     stage('SonarQube SAST') { steps { echo 'Setup: docker run -p9000:9000 sonarsource/sonar-community' } }
     stage('Deploy') {
       steps {
-        sh """
-          docker stop \$(docker ps -q --filter ancestor=${IMAGE_NAME}:latest) || true
-          docker rm \$(docker ps -aq --filter ancestor=${IMAGE_NAME}:latest) || true
-          docker run -d --name app-deploy -p 3000:3000 ${IMAGE_NAME}:\${BUILD_NUMBER}
-          sleep 10
-          curl --fail --max-time 30 http://localhost:3000/health || echo 'Health pending'
-        """
+sh '''
+  docker stop $(docker ps -q --filter ancestor=vinayreddy99/swiggy-devsecops:latest) || true
+  docker rm $(docker ps -aq --filter ancestor=vinayreddy99/swiggy-devsecops:latest) || true
+  docker run -d --name swiggy-app --restart unless-stopped --memory=512m -p 3000:3000 \\
+    -e PORT=3000 -e BUILD_NUMBER=${BUILD_NUMBER} vinayreddy99/swiggy-devsecops:${BUILD_NUMBER}
+  sleep 10 && curl -f http://localhost:3000/health || echo "Startup ongoing"
+'''
       }
     }
   }
