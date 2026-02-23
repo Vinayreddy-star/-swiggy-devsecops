@@ -4,8 +4,6 @@ pipeline {
   environment {
     IMAGE_NAME = 'vinayreddy99/swiggy-devsecops'
     DOCKERHUB_CREDENTIALS = credentials('dockerhub')
-    TRIVY_CACHE = '/data/trivy-cache'
-    TRIVY_REPORT = '/data/trivy-report'
   }
   stages {
     stage('Checkout') { steps { checkout scm } }
@@ -17,19 +15,18 @@ pipeline {
     stage('Trivy SCA') {
       steps {
         sh """
-          mkdir -p ${TRIVY_REPORT}
+          mkdir -p trivy-reports
           docker run --rm \\
             -v /var/run/docker.sock:/var/run/docker.sock \\
-            -v ${TRIVY_CACHE}:/root/.cache/ \\
+            -v \$(pwd):/work \\
+            -w /work \\
             aquasec/trivy:latest image \\
             --severity HIGH,CRITICAL --no-progress \\
-            --format json -o ${TRIVY_REPORT}/trivy-report-\${BUILD_NUMBER}.json \\
+            --format json -o trivy-reports/trivy-report.json \\
             ${IMAGE_NAME}:\${BUILD_NUMBER}
         """
-        archiveArtifacts artifacts: "${TRIVY_REPORT}/trivy-report-*.json", allowEmptyArchive: true
-        sh """
-          cat ${TRIVY_REPORT}/trivy-report-\${BUILD_NUMBER}.json | jq '.Results[] | select(.Vulnerabilities != null) | length' || echo 'No HIGH/CRIT vulns'
-        """
+        archiveArtifacts artifacts: 'trivy-reports/trivy-report.json', allowEmptyArchive: true
+        sh "cat trivy-reports/trivy-report.json | jq '.Results[] | select(.Vulnerabilities != null) | .Vulnerabilities | length' || echo 0"
       }
     }
     stage('DockerHub Push') {
@@ -41,8 +38,15 @@ pipeline {
         """
       }
     }
-    stage('SAST - SonarQube') { steps { echo 'SonarQube: Uncomment after setup' } }
-    stage('Deploy') { steps { echo 'Deploy: docker run -p 3000:3000 ...' } }
+    stage('SonarQube SAST') { 
+      steps { 
+        echo 'Install Sonar plugin/server + uncomment'
+        // withSonarQubeEnv('Sonar') { sh 'sonar-scanner' }
+      } 
+    }
+    stage('Deploy') { 
+      steps { sh "docker run -d -p 3000:3000 ${IMAGE_NAME}:\${BUILD_NUMBER} && curl -f http://localhost:3000/health" } 
+    }
   }
   post { always { sh 'docker system prune -f; docker logout || true' } }
 }
