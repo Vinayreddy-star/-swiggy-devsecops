@@ -39,3 +39,10 @@ pipeline {
         }
     }
 }
+        stage('Trivy Vulnerability Scan') {
+            steps {
+                sh 'trivy image --exit-code 0 --no-progress --format table -o trivy-report.txt vinayreddy99/swiggy-devsecops:$BUILD_NUMBER'
+                sh 'cat trivy-report.txt'
+                publishHTML([allowMissing: false, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'trivy-report.txt', reportName: 'Trivy Vulns'])
+            }
+        }
