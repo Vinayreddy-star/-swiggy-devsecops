@@ -1,0 +1,16 @@
+{
+  "name": "swiggy-devsecops",
+  "version": "1.0.0",
+  "description": "Swiggy Clone - DevSecOps CI/CD with Jenkins, Docker, SonarQube, Trivy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js",
+    "test": "echo \"Add tests later\" && exit 0"
+  },
+  "keywords": ["devops", "cicd", "docker", "jenkins"],
+  "author": "Vinay Reddy",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
