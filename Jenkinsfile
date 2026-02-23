@@ -1,9 +1,8 @@
 pipeline {
     agent any
     environment {
-        DOCKER_IMAGE = "vinayreddy99/swiggy-devsecops:\${BUILD_NUMBER}"
+        DOCKER_IMAGE = "vinayreddy99/swiggy-devsecops:\${env.BUILD_NUMBER}"
         DOCKER_REPO = "vinayreddy99/swiggy-devsecops"
-        DOCKER_CREDS = credentials('dockerhub')
     }
     stages {
         stage('Checkout') {
@@ -23,15 +22,20 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
-                sh "docker build -t \${DOCKER_IMAGE} ."
-                sh "docker tag \${DOCKER_IMAGE} \${DOCKER_REPO}:latest"
+                script {
+                    def image = "vinayreddy99/swiggy-devsecops:\${env.BUILD_NUMBER}"
+                    sh "docker build -t \${image} ."
+                    sh "docker tag \${image} ${DOCKER_REPO}:latest"
+                }
             }
         }
         stage('Docker Login & Push') {
             steps {
-                sh 'echo \$DOCKER_CREDS_PSW | docker login -u \$DOCKER_CREDS_USR --password-stdin'
-                sh "docker push \${DOCKER_IMAGE}"
-                sh "docker push \${DOCKER_REPO}:latest"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh "docker push \${DOCKER_IMAGE}"
+                    sh "docker push ${DOCKER_REPO}:latest"
+                }
             }
         }
     }
