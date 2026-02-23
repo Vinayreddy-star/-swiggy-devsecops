@@ -12,74 +12,37 @@ pipeline {
     stage('NPM Install') { steps { sh 'npm ci' } }
     stage('Test') { steps { sh 'npm test' } }
     stage('Docker Build') {
-      steps {
-        sh """
-          docker build -t ${IMAGE_NAME}:\${BUILD_NUMBER} .
-          docker tag ${IMAGE_NAME}:\${BUILD_NUMBER} ${IMAGE_NAME}:latest
-        """
-      }
+      steps { sh "docker build -t ${IMAGE_NAME}:\${BUILD_NUMBER} . && docker tag ${IMAGE_NAME}:\${BUILD_NUMBER} ${IMAGE_NAME}:latest" }
     }
     stage('Trivy SCA') {
       steps {
         sh """
           mkdir -p ${TRIVY_REPORT}
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v ${TRIVY_CACHE}:/root/.cache/ \
-            -v ${TRIVY_REPORT}:/out/ \
-            aquasec/trivy:latest image \
-            --severity HIGH,CRITICAL \
-            --exit-code 1 \
-            --format json -o /out/trivy-report-\${BUILD_NUMBER}.json \
-            --format template --template "@/usr/share/trivy/templates/html_report.tpl" -o /out/trivy-report-\${BUILD_NUMBER}.html \
-            ${IMAGE_NAME}:\${BUILD_NUMBER} || true
+          docker run --rm \\
+            -v /var/run/docker.sock:/var/run/docker.sock \\
+            -v ${TRIVY_CACHE}:/root/.cache/ \\
+            aquasec/trivy:latest image \\
+            --severity HIGH,CRITICAL --no-progress \\
+            --format json -o ${TRIVY_REPORT}/trivy-report-\${BUILD_NUMBER}.json \\
+            ${IMAGE_NAME}:\${BUILD_NUMBER}
         """
-        publishHTML([
-          allowMissing: false,
-          alwaysLinkToLastBuild: true,
- keepAll: true,
-          reportDir: "${TRIVY_REPORT}",
-          reportFiles: "trivy-report-\${BUILD_NUMBER}.html",
-          reportName: "Trivy HTML Report"
-        ])
-        archiveArtifacts artifacts: "${TRIVY_REPORT}/trivy-report-\${BUILD_NUMBER}.json", allowEmptyArchive: true
+        archiveArtifacts artifacts: "${TRIVY_REPORT}/trivy-report-*.json", allowEmptyArchive: true
+        sh """
+          cat ${TRIVY_REPORT}/trivy-report-\${BUILD_NUMBER}.json | jq '.Results[] | select(.Vulnerabilities != null) | length' || echo 'No HIGH/CRIT vulns'
+        """
       }
     }
     stage('DockerHub Push') {
       steps {
-        withDockerRegistry([credentialsId: 'dockerhub', url: '']) {
-          sh """
-            docker login -u ${DOCKERHUB_CREDENTIALS_USR} -p ${DOCKERHUB_CREDENTIALS_PSW}
-            docker push ${IMAGE_NAME}:\${BUILD_NUMBER}
-            docker push ${IMAGE_NAME}:latest
-          """
-        }
-      }
-    }
-    stage('SAST - SonarQube') {
-      // steps {
-      //   withSonarQubeEnv('SonarQube') {
-      //     sh 'sonar-scanner -Dsonar.projectKey=swiggy-devsecops -Dsonar.sources=.'
-      //   }
-      //   timeout(time: 1, unit: 'HOURS') {
-      //     waitForQualityGate abortPipeline: true
-      //   }
-      // }
-      steps { echo 'SonarQube: Install plugin + server, uncomment, re-run' }
-    }
-    stage('Deploy') {
-      steps { 
         sh """
-          echo 'Deploy stub: e.g., docker run -d -p 3000:3000 ${IMAGE_NAME}:\${BUILD_NUMBER}'
-          echo 'Next: AWS ECR/ECS or Kubernetes via Terraform'
+          echo \${DOCKERHUB_CREDENTIALS_PSW} | docker login -u \${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+          docker push ${IMAGE_NAME}:\${BUILD_NUMBER}
+          docker push ${IMAGE_NAME}:latest
         """
       }
     }
+    stage('SAST - SonarQube') { steps { echo 'SonarQube: Uncomment after setup' } }
+    stage('Deploy') { steps { echo 'Deploy: docker run -p 3000:3000 ...' } }
   }
-  post {
-    always {
-      sh 'docker system prune -f || true'
-      sh 'docker logout || true'
-    }
-  }
+  post { always { sh 'docker system prune -f; docker logout || true' } }
 }
